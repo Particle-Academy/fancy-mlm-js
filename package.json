@@ -1,0 +1,59 @@
+{
+  "name": "@particle-academy/fancy-mlm",
+  "version": "0.1.0",
+  "description": "Framework-agnostic multi-level referral / network-marketing engine — Node/TS mirror of particle-academy/fancy-mlm (PHP). Same plan JSON, identical rewards.",
+  "keywords": [
+    "mlm",
+    "referral",
+    "network-marketing",
+    "downline",
+    "commissions",
+    "particle-academy"
+  ],
+  "homepage": "https://github.com/Particle-Academy/fancy-mlm-js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Particle-Academy/fancy-mlm-js.git"
+  },
+  "bugs": "https://github.com/Particle-Academy/fancy-mlm-js/issues",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "tsup"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
