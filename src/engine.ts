@@ -1,14 +1,16 @@
 import type { MemberRepository, RewardSink } from "./contracts";
 import type { CompensationPlan } from "./plan";
 import type { RewardComputation } from "./reward";
+import { treeFor } from "./tree";
 
 /**
- * Distribute a referral reward up the sponsor tree from the member who acted:
+ * Distribute a referral reward from the member who acted, up the tree the plan
+ * configures — unilevel (sponsor tree), binary or matrix (placement tree):
  *
  *     amount = baseAmount × levelFactor(level) × tierMultiplier(uplineTier)
  *
- * Dynamic compression skips inactive uplines (they don't consume a level); a
- * visited-set guards cyclic sponsor chains. Byte-for-byte mirror of PHP
+ * The plan's tree strategy does the walk (dynamic compression + cycle guard);
+ * each reward is handed to the sink. Byte-for-byte mirror of PHP
  * `FancyMlm\Referral\ReferralEngine`.
  */
 export class ReferralEngine {
@@ -28,55 +30,16 @@ export class ReferralEngine {
       return [];
     }
 
-    const rewards: RewardComputation[] = [];
-    const maxLevels = this.plan.levels();
-    const visited = new Set<string>([origin.id]);
-    let currentId: string | null = origin.sponsorId ?? null;
-    let level = 0;
+    const rewards = treeFor(this.plan).distribute(
+      origin,
+      baseAmount,
+      this.plan,
+      this.members,
+      context,
+    );
 
-    while (currentId !== null && level < maxLevels) {
-      if (visited.has(currentId)) {
-        break; // cyclic sponsor chain
-      }
-      visited.add(currentId);
-
-      const upline = this.members.find(currentId);
-      if (upline === null) {
-        break;
-      }
-
-      if (upline.active === false) {
-        if (this.plan.compression) {
-          currentId = upline.sponsorId ?? null;
-          continue;
-        }
-        break; // no compression: inactive member blocks the chain
-      }
-
-      level++;
-      const factor = this.plan.levelFactor(level);
-      const tier = upline.tier ?? "default";
-      const multiplier = this.plan.tierMultiplier(tier);
-      const amount = baseAmount * factor * multiplier;
-
-      if (amount > 0) {
-        const reward: RewardComputation = {
-          originMemberId: origin.id,
-          recipientMemberId: upline.id,
-          level,
-          metric: this.plan.metric,
-          baseAmount,
-          tier,
-          tierMultiplier: multiplier,
-          levelFactor: factor,
-          amount,
-          context,
-        };
-        this.sink.pay(reward);
-        rewards.push(reward);
-      }
-
-      currentId = upline.sponsorId ?? null;
+    for (const reward of rewards) {
+      this.sink.pay(reward);
     }
 
     return rewards;

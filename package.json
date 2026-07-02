@@ -1,6 +1,6 @@
 {
   "name": "@particle-academy/fancy-mlm",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Framework-agnostic multi-level referral / network-marketing engine — Node/TS mirror of particle-academy/fancy-mlm (PHP). Same plan JSON, identical rewards.",
   "keywords": [
     "mlm",

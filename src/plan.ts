@@ -1,7 +1,14 @@
 import type { Tier } from "./member";
 
+/** The downline shape a reward climbs. Mirror of PHP `CompensationPlan::TREE_*`. */
+export type TreeType = "unilevel" | "binary" | "matrix";
+
 /** Plain-object (JSON) shape of a {@link CompensationPlan} — the cross-language artifact. */
 export interface PlanData {
+  /** Downline shape: unilevel (sponsor tree), binary or matrix (placement tree). */
+  tree?: TreeType;
+  /** Matrix frontline width (ignored by unilevel/binary; 0 = default). */
+  width?: number;
   metric?: string;
   levelFactors?: number[];
   tiers?: Record<string, number | { multiplier?: number; label?: string | null }>;
@@ -21,6 +28,8 @@ export class CompensationPlan {
     readonly tiers: Record<string, Tier>,
     readonly compression: boolean,
     readonly defaultTier: string,
+    readonly tree: TreeType = "unilevel",
+    readonly width: number = 0,
   ) {}
 
   /** Number of upline levels this plan rewards. */
@@ -47,12 +56,16 @@ export class CompensationPlan {
           : { key, multiplier: Number(value) };
     }
 
+    const tree = data.tree === "binary" || data.tree === "matrix" ? data.tree : "unilevel";
+
     return new CompensationPlan(
       String(data.metric ?? "referral-bonus"),
       (data.levelFactors ?? [1]).map(Number),
       tiers,
       data.compression ?? true,
       String(data.defaultTier ?? "default"),
+      tree,
+      Number(data.width ?? 0),
     );
   }
 
@@ -63,6 +76,8 @@ export class CompensationPlan {
     }
 
     return {
+      tree: this.tree,
+      width: this.width,
       metric: this.metric,
       levelFactors: this.levelFactors,
       tiers,

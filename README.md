@@ -5,10 +5,11 @@
 (PHP). A framework-agnostic multi-level **referral / network-marketing engine**:
 isomorphic, zero-dependency, same `CompensationPlan` JSON, **identical rewards**.
 
-> **MVP (v0.x):** Unilevel referral bonuses — a reward flows up the sponsor tree,
+> **v0.2:** Configurable **downline trees** — `unilevel` (unlimited frontline, up
+> the sponsor tree), `binary` (two legs, up the placement tree), and `matrix`
+> (forced W×depth, up the placement tree). A reward flows up the chosen tree,
 > decaying per level and scaling by each upline member's tier, with dynamic
-> compression. Binary/matrix trees, ledgers, and catalog/fms adapters are on the
-> roadmap.
+> compression. Ledgers and catalog/fms adapters are on the roadmap.
 
 ## Install
 
@@ -47,6 +48,23 @@ const rewards = new ReferralEngine(plan, members, sink).distribute("origin", 100
 Implement `MemberRepository` (`find(id)`) and `RewardSink` (`pay(reward)`) against
 your own store — award points, write a commission ledger, enqueue a job. The
 engine never knows which.
+
+### Downline trees
+
+`tree` selects the parent chain the reward climbs — the walk is identical, only
+the pointer differs:
+
+```ts
+const unilevel = CompensationPlan.fromJSON({ tree: "unilevel", levelFactors: [1.0, 0.5, 0.25] });
+const binary   = CompensationPlan.fromJSON({ tree: "binary",   levelFactors: [1.0, 0.5, 0.25] });
+const matrix   = CompensationPlan.fromJSON({ tree: "matrix", width: 3, levelFactors: [1.0, 0.5, 0.25] });
+```
+
+| tree | climbs | frontline |
+|---|---|---|
+| `unilevel` | sponsor tree (`sponsorId`) | unlimited |
+| `binary` | placement tree (`placementId`, falls back to `sponsorId`) | 2 |
+| `matrix` | placement tree (`placementId`, falls back to `sponsorId`) | `width` |
 
 ## Parity with PHP
 
