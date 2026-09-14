@@ -1,5 +1,7 @@
 # Fancy MLM (Node / TypeScript)
 
+[![Fancified](art/fancified.svg)](https://particle.academy)
+
 `@particle-academy/fancy-mlm` — the **Node mirror** of
 [`particle-academy/fancy-mlm`](https://github.com/Particle-Academy/fancy-mlm-php)
 (PHP). A framework-agnostic multi-level **referral / network-marketing engine**:
