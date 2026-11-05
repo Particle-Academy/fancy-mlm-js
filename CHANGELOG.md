@@ -15,6 +15,8 @@ upgrading.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-04
+
 ### Added
 
 - **An audited admin override for a sponsor set wrong:** `ReferralProgram.correctSponsor(memberId, toSponsorId, reason, actorId)`, the twin of PHP `Mlm::correctSponsor()`. It is a separate method, not a flag. `assignSponsor` and `attributeSignup` stay exactly as locked as 0.4.0. It requires a reason (non-empty after PHP-style trimming, at most 1000 UTF-8 bytes) and an actor id. It still refuses self-referral, cycles, unknown members, a member with no sponsor yet, and the sponsor already set.
