@@ -15,6 +15,8 @@ upgrading.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-04
+
 ### Added
 
 - **Referral codes, scan logging, attribution and stats**, mirroring `particle-academy/fancy-mlm`: `ReferralProgram` (`issueCode`, `revokeCode`, `recordScan`, `attributeSignup`, `assignSponsor`, `stats`, `pruneScans`) over an `AttributionStore` port, with `ArrayAttributionStore` in memory. Codes are 80-bit Web Crypto strings in a host-defined scope (`scopeKey` takes an opaque string or a tuple). Scans store an HMAC-SHA256 visitor hash (`SessionHasher`, which refuses an empty key) and only the context you pass, never an IP, user agent or raw session id. First touch by default over a 30-day window; self-referral, cycles and revoked or expired codes attribute nothing; the sponsor is permanent (`SponsorImmutable`). Additive: nothing existing changed.
