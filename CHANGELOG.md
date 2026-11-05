@@ -15,6 +15,12 @@ upgrading.
 
 ## [Unreleased]
 
+### Added
+
+- **Referral codes, scan logging, attribution and stats**, mirroring `particle-academy/fancy-mlm`: `ReferralProgram` (`issueCode`, `revokeCode`, `recordScan`, `attributeSignup`, `assignSponsor`, `stats`, `pruneScans`) over an `AttributionStore` port, with `ArrayAttributionStore` in memory. Codes are 80-bit Web Crypto strings in a host-defined scope (`scopeKey` takes an opaque string or a tuple). Scans store an HMAC-SHA256 visitor hash (`SessionHasher`, which refuses an empty key) and only the context you pass, never an IP, user agent or raw session id. First touch by default over a 30-day window; self-referral, cycles and revoked or expired codes attribute nothing; the sponsor is permanent (`SponsorImmutable`). Additive: nothing existing changed.
+- A shared fixture, `src/attribution/fixtures/referral-attribution.json`, byte-identical to the PHP package's and asserted by digest on both sides. It pins the edges a port gets wrong silently, including ASCII-only lowercasing and PHP `trim()` semantics for codes.
+- **The new API is async** (`AttributionStore` methods may return Promises), unlike the synchronous reward engine, so a database-backed Node host can implement the store.
+
 ### Fixed
 
 - **`CHANGELOG.md` is now in the published tarball.** `files` did not whitelist it, so npm never shipped it — and this package puts breaking changes in MINOR releases and tells you in the README to read the entry before taking one. The instruction existed for the author, who has the file, and not for the consumer, who is the only one being instructed. Nothing for you to do; the file simply arrives from this release on.

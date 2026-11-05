@@ -68,6 +68,60 @@ const matrix   = CompensationPlan.fromJSON({ tree: "matrix", width: 3, levelFact
 | `binary` | placement tree (`placementId`, falls back to `sponsorId`) | 2 |
 | `matrix` | placement tree (`placementId`, falls back to `sponsorId`) | `width` |
 
+## Referral codes, scans and attribution
+
+Codes and links, scan and click logging, scan-to-signup attribution with a
+**permanent** sponsor, and conversion stats. Privacy-first, and the same rules
+as the PHP package (a shared fixture holds both to it).
+
+```ts
+import { ReferralProgram, ArrayAttributionStore, SessionHasher, policyFrom } from "@particle-academy/fancy-mlm";
+
+const store = new ArrayAttributionStore().addMember("1").addMember("2");
+const referrals = new ReferralProgram(
+  store,
+  new SessionHasher(process.env.MLM_SESSION_HASH_KEY!),   // required: hashes are never unkeyed
+  policyFrom({ model: "first_touch", windowSeconds: 30 * 86400, dedupeSeconds: 1800 }),
+);
+
+// The scope is yours: an opaque string, or a tuple encoded into one.
+const { code } = await referrals.issueCode("1", ["region-7", "team-12"]);
+
+// On a scan or click (your URL shape, your visitor id):
+await referrals.recordScan(code, visitorId);          // recorded | duplicate | code_inactive | unknown_code
+
+// When member "2" signs up from that visitor:
+const decision = await referrals.attributeSignup("2", visitorId);
+// { attributed: true, sponsorMemberId: "1", code, reason: "attributed", ... }
+
+await referrals.stats("code", from, to, { member: "1" });
+// [{ key, scans, uniqueSessions, signups, conversionRate }]
+```
+
+Implement `AttributionStore` against your database; every method may return a
+value or a Promise. Your `assignSponsor` must set the sponsor only while it is
+unset, atomically (for example `UPDATE ... WHERE sponsor_id IS NULL`), and throw
+`SponsorImmutable` otherwise.
+
+- **Codes:** 16 characters from Web Crypto over a 32-letter alphabet (80 bits).
+  Case-insensitive; active or revoked, with optional expiry.
+- **Scans store** the code, its owner and scope, the time, an HMAC-SHA256 of the
+  visitor id, and only the `context` you pass. **Never an IP, a user agent or a
+  raw session id.** If you pass either in `context`, you hold personal data and
+  your retention becomes a legal obligation.
+- **Dedupe:** a repeat scan of one code by one visitor inside `dedupeSeconds` is
+  `duplicate` and not stored.
+- **Attribution:** first touch by default (the first introduction wins and a
+  later link cannot snipe it; the sponsor is permanent, so this decides who owns
+  a member for good). The code must be active and unexpired at signup;
+  self-referral and cycles are refused.
+- **The sponsor is permanent:** `assignSponsor` throws `SponsorImmutable` on a
+  change, `SelfReferral` and `SponsorCycle` on the obvious.
+- **Retention:** `pruneScans(retentionSeconds)` refuses a retention shorter than
+  the attribution window. Rate limiting is your host's job.
+
+Runs on Node 22+ and in browsers (Web Crypto); still zero dependencies.
+
 ## Parity with PHP
 
 The same plan JSON + the same tree yields the same rewards as the PHP package —
