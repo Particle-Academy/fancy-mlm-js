@@ -15,6 +15,17 @@ upgrading.
 
 ## [Unreleased]
 
+### Added
+
+- **An audited admin override for a sponsor set wrong:** `ReferralProgram.correctSponsor(memberId, toSponsorId, reason, actorId)`, the twin of PHP `Mlm::correctSponsor()`. It is a separate method, not a flag. `assignSponsor` and `attributeSignup` stay exactly as locked as 0.4.0. It requires a reason (non-empty after PHP-style trimming, at most 1000 UTF-8 bytes) and an actor id. It still refuses self-referral, cycles, unknown members, a member with no sponsor yet, and the sponsor already set.
+- **Authorization is yours, and the default is deny.** Pass an authorizer as `ReferralProgram`'s sixth constructor argument. Without one, every correction throws `CorrectionUnauthorized`. Only a strict `true` authorizes.
+- `SponsorCorrectionStore`, an optional interface for stores that append the audit row and move the sponsor atomically. It has no update or delete: audit rows are append-only. `ArrayAttributionStore` implements it, and `program.sponsorCorrections(memberId)` reads the history.
+- Types `SponsorCorrection`, `SponsorCorrectionRequest`, `SponsorCorrectionAuthorizer`, plus `CORRECTION_REASON_MAX_BYTES`, `CORRECTION_ACTOR_MAX_BYTES`, `normalizeCorrectionReason`, `assertCorrectionActor` and `isSponsorCorrectionStore`.
+- A shared fixture, `src/attribution/fixtures/sponsor-correction.json` (23 rows), byte-identical to `particle-academy/fancy-mlm`'s copy.
+- `ArrayAttributionStore.dump()` now also returns `corrections`.
+
+  **What you must do:** nothing, unless you want the override. Your own `AttributionStore` keeps compiling; `correctSponsor` refuses until it also implements `SponsorCorrectionStore`. No existing behaviour changed.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added

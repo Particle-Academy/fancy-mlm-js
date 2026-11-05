@@ -25,14 +25,31 @@ export type {
   StatsFilter,
   StatRow,
   MaybePromise,
+  SponsorCorrection,
+  SponsorCorrectionRequest,
+  SponsorCorrectionAuthorizer,
 } from "./attribution/types";
-export { InvalidInput, AttributionError, SponsorImmutable, SelfReferral, SponsorCycle, UnknownMember } from "./attribution/errors";
+export {
+  InvalidInput,
+  AttributionError,
+  SponsorImmutable,
+  SelfReferral,
+  SponsorCycle,
+  UnknownMember,
+  CorrectionUnauthorized,
+} from "./attribution/errors";
+export {
+  CORRECTION_REASON_MAX_BYTES,
+  CORRECTION_ACTOR_MAX_BYTES,
+  normalizeCorrectionReason,
+  assertCorrectionActor,
+} from "./attribution/correction";
 export { CODE_ALPHABET, CODE_DEFAULT_LENGTH, CODE_MIN_LENGTH, CODE_MAX_LENGTH, generateCode, normalizeCode } from "./attribution/codes";
 export { SCOPE_MAX_BYTES, scopeKey } from "./attribution/scope";
 export type { ScopeInput } from "./attribution/scope";
 export { SessionHasher } from "./attribution/hash";
 export { policyFrom, codeUsableAt, wouldCycle, assertSponsorAssignable, decideAttribution } from "./attribution/rules";
 export type { SponsorLookup } from "./attribution/rules";
-export type { AttributionStore } from "./attribution/store";
-export { ArrayAttributionStore, statRow, mergeStats } from "./attribution/store";
+export type { AttributionStore, SponsorCorrectionStore } from "./attribution/store";
+export { ArrayAttributionStore, statRow, mergeStats, isSponsorCorrectionStore } from "./attribution/store";
 export { ReferralProgram } from "./attribution/program";

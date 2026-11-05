@@ -38,6 +38,13 @@ export class SponsorCycle extends AttributionError {
   }
 }
 
+/** No authorizer is configured (the default), or it returned anything other than true. */
+export class CorrectionUnauthorized extends AttributionError {
+  static for(memberId: string): CorrectionUnauthorized {
+    return new CorrectionUnauthorized(`fancy-mlm: not authorized to correct the sponsor of member ${memberId}.`);
+  }
+}
+
 export class UnknownMember extends AttributionError {
   static for(memberId: string): UnknownMember {
     return new UnknownMember(`fancy-mlm: no member ${memberId}.`);

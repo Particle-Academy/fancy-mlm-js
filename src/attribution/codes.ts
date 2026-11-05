@@ -25,7 +25,7 @@ export function generateCode(length: number = CODE_DEFAULT_LENGTH): string {
 /** Exactly PHP's trim() set: space, tab, LF, CR, NUL, vertical tab. Not Unicode whitespace. */
 const PHP_TRIM = new Set([" ", "\t", "\n", "\r", "\0", "\x0B"]);
 
-function phpTrim(value: string): string {
+export function phpTrim(value: string): string {
   let start = 0;
   let end = value.length;
   while (start < end && PHP_TRIM.has(value[start]!)) start++;

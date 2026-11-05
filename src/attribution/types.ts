@@ -94,3 +94,30 @@ export interface StatRow {
 }
 
 export type MaybePromise<T> = T | Promise<T>;
+
+/**
+ * One audited sponsor correction: who changed which member's sponsor, from
+ * what, to what, when and why. Append-only. Mirror of PHP
+ * `FancyMlm\Attribution\SponsorCorrection`.
+ */
+export interface SponsorCorrection {
+  id: string | null;
+  memberId: string;
+  fromSponsorId: string;
+  toSponsorId: string;
+  /** Trimmed with PHP trim() semantics. */
+  reason: string;
+  actorId: string;
+  correctedAt: Date;
+}
+
+/** What a correction asks for, as handed to the host's authorizer. The reason is already trimmed and validated. */
+export interface SponsorCorrectionRequest {
+  memberId: string;
+  toSponsorId: string;
+  reason: string;
+  actorId: string;
+}
+
+/** Decides a correction. Only a strict `true` (or a promise of it) authorizes. */
+export type SponsorCorrectionAuthorizer = (request: SponsorCorrectionRequest) => MaybePromise<boolean>;

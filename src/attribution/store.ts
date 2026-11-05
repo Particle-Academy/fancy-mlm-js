@@ -1,6 +1,6 @@
 import { InvalidInput, SponsorImmutable } from "./errors";
 import { utf8 } from "./webcrypto";
-import type { Attribution, MaybePromise, ReferralCode, Scan, StatRow, StatsFilter, StatsGroupBy } from "./types";
+import type { Attribution, MaybePromise, ReferralCode, Scan, SponsorCorrection, StatRow, StatsFilter, StatsGroupBy } from "./types";
 
 /**
  * Port for referral codes, scans and attributions. Mirror of PHP
@@ -30,6 +30,30 @@ export interface AttributionStore {
   stats(groupBy: StatsGroupBy, from: Date, to: Date, filter?: StatsFilter): MaybePromise<StatRow[]>;
   /** Delete scans before `before`; returns how many. */
   pruneScans(before: Date): MaybePromise<number>;
+}
+
+/**
+ * Optional companion to {@link AttributionStore} for stores that can record an
+ * audited sponsor correction. Separate so a host's own store keeps compiling;
+ * without it `correctSponsor()` refuses. Mirror of PHP
+ * `FancyMlm\Contracts\SponsorCorrectionStore`. There is deliberately no update
+ * or delete: audit rows are append-only.
+ */
+export interface SponsorCorrectionStore {
+  /**
+   * Atomically append the audit row and move the sponsor from `fromSponsorId`
+   * to `toSponsorId`. If the sponsor is no longer `fromSponsorId`, throw
+   * {@link SponsorImmutable} and write nothing. A database-backed store writes
+   * the audit row first: that row is what its guard admits the change on.
+   */
+  applySponsorCorrection(correction: SponsorCorrection): MaybePromise<SponsorCorrection>;
+  /** Every correction of this member, oldest first. */
+  sponsorCorrections(memberId: string): MaybePromise<SponsorCorrection[]>;
+}
+
+export function isSponsorCorrectionStore(store: object): store is SponsorCorrectionStore {
+  const s = store as Partial<SponsorCorrectionStore>;
+  return typeof s.applySponsorCorrection === "function" && typeof s.sponsorCorrections === "function";
 }
 
 export function assertGroupBy(groupBy: string): asserts groupBy is StatsGroupBy {
@@ -64,8 +88,10 @@ export function mergeStats(scans: Map<string, { scans: number; sessions: number 
 }
 
 /** In-memory {@link AttributionStore} for tests and small hosts. Mirror of PHP `ArrayAttributionStore`. */
-export class ArrayAttributionStore implements AttributionStore {
+export class ArrayAttributionStore implements AttributionStore, SponsorCorrectionStore {
   private members = new Map<string, string | null>();
+  /** Append-only. */
+  private corrections: SponsorCorrection[] = [];
   private readonly codes = new Map<string, ReferralCode>();
   private scans: Scan[] = [];
   private attributions = new Map<string, Attribution>();
@@ -81,8 +107,14 @@ export class ArrayAttributionStore implements AttributionStore {
   }
 
   /** Everything held, for inspection. */
-  dump(): { members: Array<[string, string | null]>; codes: ReferralCode[]; scans: Scan[]; attributions: Attribution[] } {
-    return { members: [...this.members], codes: [...this.codes.values()], scans: [...this.scans], attributions: [...this.attributions.values()] };
+  dump(): { members: Array<[string, string | null]>; codes: ReferralCode[]; scans: Scan[]; attributions: Attribution[]; corrections: SponsorCorrection[] } {
+    return {
+      members: [...this.members],
+      codes: [...this.codes.values()],
+      scans: [...this.scans],
+      attributions: [...this.attributions.values()],
+      corrections: this.corrections.map((c) => ({ ...c })),
+    };
   }
 
   async memberExists(memberId: string): Promise<boolean> {
@@ -151,14 +183,29 @@ export class ArrayAttributionStore implements AttributionStore {
     this.attributions.set(attribution.memberId, attribution);
   }
 
+  async applySponsorCorrection(correction: SponsorCorrection): Promise<SponsorCorrection> {
+    const current = this.members.get(correction.memberId) ?? null;
+    if (current !== correction.fromSponsorId) throw SponsorImmutable.for(correction.memberId, current, correction.toSponsorId);
+    const saved = { ...correction, id: String(this.corrections.length + 1) };
+    this.corrections.push(saved);
+    this.members.set(correction.memberId, correction.toSponsorId);
+    return { ...saved };
+  }
+
+  async sponsorCorrections(memberId: string): Promise<SponsorCorrection[]> {
+    return this.corrections.filter((c) => c.memberId === memberId).map((c) => ({ ...c }));
+  }
+
   async transaction<T>(fn: () => Promise<T>): Promise<T> {
     const members = new Map(this.members);
     const attributions = new Map(this.attributions);
+    const corrections = [...this.corrections];
     try {
       return await fn();
     } catch (e) {
       this.members = members;
       this.attributions = attributions;
+      this.corrections = corrections;
       throw e;
     }
   }

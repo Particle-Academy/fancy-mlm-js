@@ -120,6 +120,41 @@ unset, atomically (for example `UPDATE ... WHERE sponsor_id IS NULL`), and throw
 - **Retention:** `pruneScans(retentionSeconds)` refuses a retention shorter than
   the attribution window. Rate limiting is your host's job.
 
+### Correcting a sponsor set wrong (audited)
+
+One separate method changes a sponsor that is already set, after a support
+ticket or a fraud finding. Every path above stays as locked as before.
+
+```ts
+const program = new ReferralProgram(store, hasher, policyFrom(), undefined, undefined,
+  // the authorizer: yours to write. Without one, every correction is refused.
+  async (request) => (await currentUser()).isSupportLead === true,
+);
+
+const correction = await program.correctSponsor(memberId, newSponsorId, "Ticket 4411: wrong link", actorId);
+await program.sponsorCorrections(memberId); // audit history, oldest first
+```
+
+- **Default deny.** No authorizer means `CorrectionUnauthorized`. Only a strict
+  `true` (or a promise of it) authorizes: `1` or `"yes"` does not.
+- **A reason is required:** non-empty after PHP `trim()` (ASCII whitespace and
+  NUL, not Unicode spaces), at most 1000 UTF-8 bytes, stored trimmed. An actor id
+  is required too (at most 191 bytes).
+- **Still refused:** self-referral, cycles, unknown members, a member with no
+  sponsor yet (use `assignSponsor`), and the sponsor already set.
+- **Audit rows are append-only.** The store interface has no update or delete
+  for them. A store opts in by implementing `SponsorCorrectionStore`, which
+  appends the row and moves the sponsor atomically. `ArrayAttributionStore`
+  does. Without it, `correctSponsor` refuses, and your existing
+  `AttributionStore` keeps compiling unchanged. If your store sits on a
+  database, give it a guard like the PHP package's trigger. That trigger refuses
+  any change to a set sponsor except the one the member's latest audit row
+  names, and makes the audit table refuse `UPDATE` and `DELETE`.
+
+The shared table `src/attribution/fixtures/sponsor-correction.json` pins the
+behaviour, including check order and trim semantics. It is byte-identical to the
+PHP package's copy.
+
 Runs on Node 22+ and in browsers (Web Crypto); still zero dependencies.
 
 ## Parity with PHP

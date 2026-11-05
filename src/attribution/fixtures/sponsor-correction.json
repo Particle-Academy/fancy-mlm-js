@@ -1,0 +1,149 @@
+{
+  "suite": "mlm/sponsor-correction",
+  "status": "proposed",
+  "notes": [
+    "PROPOSED for fancy-conformance, not yet promoted. Carried byte-identically by particle-academy/fancy-mlm (tests/fixtures/) and @particle-academy/fancy-mlm (src/attribution/fixtures/); both suites assert its SHA-256 (CRLF folded to LF).",
+    "correctSponsor is the ONE audited way to change a sponsor that is already set. Every row runs its steps in order against an in-memory store seeded with `members` (member id => sponsor id or null), and reports each step's outcome, every member's sponsor afterwards, and the audit rows written.",
+    "Outcome is `corrected`, `refused:<field>` for an InvalidInput, or the exception's class name. A refused step changes nothing and writes no audit row.",
+    "Check order, which both twins must keep: reason, then actorId, then authorization, then that both members exist, then that the member has a sponsor to correct, then that the target differs from it, then self-referral, then cycle. Authorization comes before existence so an unauthorized caller learns nothing about which members exist.",
+    "reason: PHP trim() semantics (space, tab, LF, CR, NUL, vertical tab only; Unicode whitespace is NOT trimmed), non-empty after trimming, at most 1000 UTF-8 bytes after trimming, stored trimmed. actorId: non-empty after trimming, at most 191 UTF-8 bytes, stored as given.",
+    "authorize: `absent` passes no authorizer (default deny), `allow` returns true, `deny` returns false, `truthy` returns the number 1. Only a strict true authorizes.",
+    "Any string input may be given as {\"repeat\": s, \"times\": n, \"then\": suffix} to build a long value without spelling it out."
+  ],
+  "cases": [
+    { "id": "0001-corrects-a-set-sponsor", "title": "An authorized correction with a reason moves the member and writes one audit row",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": "Support ticket 4411: signed up through the wrong link", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["corrected"], "sponsors": { "m": "b", "a": null, "b": null },
+        "audit": [ { "memberId": "m", "fromSponsorId": "a", "toSponsorId": "b", "reason": "Support ticket 4411: signed up through the wrong link", "actorId": "admin-7" } ] } },
+
+    { "id": "0002-reason-is-trimmed", "title": "The reason is stored trimmed",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": "  fraud finding F-12\n", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["corrected"], "sponsors": { "m": "b", "a": null, "b": null },
+        "audit": [ { "memberId": "m", "fromSponsorId": "a", "toSponsorId": "b", "reason": "fraud finding F-12", "actorId": "admin-7" } ] } },
+
+    { "id": "0003-empty-reason-refused", "title": "No reason, no correction",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": "", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["refused:reason"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0004-whitespace-reason-refused", "title": "A reason of only trimmable whitespace is no reason",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": " \t\n\r ", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["refused:reason"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0005-unicode-space-is-not-trimmed", "title": "PHP trim() leaves U+3000 alone, so a JS twin using String.trim() would disagree here",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": "　", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["corrected"], "sponsors": { "m": "b", "a": null, "b": null },
+        "audit": [ { "memberId": "m", "fromSponsorId": "a", "toSponsorId": "b", "reason": "　", "actorId": "admin-7" } ] } },
+
+    { "id": "0006-reason-at-the-byte-limit", "title": "1000 UTF-8 bytes (500 two-byte characters) is accepted",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": { "repeat": "é", "times": 500, "then": "" }, "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["corrected"], "sponsors": { "m": "b", "a": null, "b": null },
+        "audit": [ { "memberId": "m", "fromSponsorId": "a", "toSponsorId": "b", "reason": { "repeat": "é", "times": 500, "then": "" }, "actorId": "admin-7" } ] } },
+
+    { "id": "0007-reason-over-the-byte-limit", "title": "1001 bytes is refused, counted in bytes rather than characters",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": { "repeat": "é", "times": 500, "then": "x" }, "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["refused:reason"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0008-empty-actor-refused", "title": "Every correction names who made it",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": "ticket 1", "actorId": " " } ] },
+      "expected": { "outcomes": ["refused:actorId"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0009-actor-over-191-bytes", "title": "An actor id wider than its column is refused",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": "ticket 1", "actorId": { "repeat": "a", "times": 192, "then": "" } } ] },
+      "expected": { "outcomes": ["refused:actorId"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0010-no-authorizer-denies", "title": "With no authorizer configured, every correction is refused",
+      "input": { "authorize": "absent", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": "ticket 1", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["CorrectionUnauthorized"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0011-authorizer-says-no", "title": "An authorizer returning false refuses",
+      "input": { "authorize": "deny", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": "ticket 1", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["CorrectionUnauthorized"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0012-truthy-is-not-true", "title": "Only a strict true authorizes; 1 does not",
+      "input": { "authorize": "truthy", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": "ticket 1", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["CorrectionUnauthorized"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0013-validation-before-authorization", "title": "A missing reason is reported even when no authorizer exists",
+      "input": { "authorize": "absent", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": "", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["refused:reason"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0014-authorization-before-existence", "title": "An unauthorized caller is not told whether the member exists",
+      "input": { "authorize": "deny", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "ghost", "toSponsorId": "b", "reason": "ticket 1", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["CorrectionUnauthorized"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0015-unknown-member", "title": "A member that does not exist is refused",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "ghost", "toSponsorId": "b", "reason": "ticket 1", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["UnknownMember"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0016-unknown-target", "title": "A target that does not exist is refused",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "ghost", "reason": "ticket 1", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["UnknownMember"], "sponsors": { "m": "a", "a": null, "b": null }, "audit": [] } },
+
+    { "id": "0017-nothing-to-correct", "title": "A member with no sponsor is assigned one through the normal path, not corrected",
+      "input": { "authorize": "allow", "members": { "m": null, "a": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "a", "reason": "ticket 1", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["refused:memberId"], "sponsors": { "m": null, "a": null }, "audit": [] } },
+
+    { "id": "0018-same-sponsor", "title": "Correcting to the sponsor already set is refused rather than audited as a no-op",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "a", "reason": "ticket 1", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["refused:toSponsorId"], "sponsors": { "m": "a", "a": null }, "audit": [] } },
+
+    { "id": "0019-self-referral", "title": "A correction cannot make a member their own sponsor",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null },
+        "steps": [ { "memberId": "m", "toSponsorId": "m", "reason": "ticket 1", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["SelfReferral"], "sponsors": { "m": "a", "a": null }, "audit": [] } },
+
+    { "id": "0020-cycle", "title": "A correction cannot move a member under their own downline",
+      "input": { "authorize": "allow", "members": { "a": null, "m": "a", "c": "m", "d": "c" },
+        "steps": [ { "memberId": "m", "toSponsorId": "d", "reason": "ticket 1", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["SponsorCycle"], "sponsors": { "a": null, "m": "a", "c": "m", "d": "c" }, "audit": [] } },
+
+    { "id": "0021-downline-moves-with-the-member", "title": "Correcting a member moves them; their own downline still points at them",
+      "input": { "authorize": "allow", "members": { "a": null, "b": null, "m": "a", "c": "m" },
+        "steps": [ { "memberId": "m", "toSponsorId": "b", "reason": "ticket 1", "actorId": "admin-7" } ] },
+      "expected": { "outcomes": ["corrected"], "sponsors": { "a": null, "b": null, "m": "b", "c": "m" },
+        "audit": [ { "memberId": "m", "fromSponsorId": "a", "toSponsorId": "b", "reason": "ticket 1", "actorId": "admin-7" } ] } },
+
+    { "id": "0022-corrected-and-corrected-back", "title": "Two corrections are two audit rows, in order",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null },
+        "steps": [
+          { "memberId": "m", "toSponsorId": "b", "reason": "ticket 1", "actorId": "admin-7" },
+          { "memberId": "m", "toSponsorId": "a", "reason": "ticket 1 was itself wrong", "actorId": "admin-9" }
+        ] },
+      "expected": { "outcomes": ["corrected", "corrected"], "sponsors": { "m": "a", "a": null, "b": null },
+        "audit": [
+          { "memberId": "m", "fromSponsorId": "a", "toSponsorId": "b", "reason": "ticket 1", "actorId": "admin-7" },
+          { "memberId": "m", "fromSponsorId": "b", "toSponsorId": "a", "reason": "ticket 1 was itself wrong", "actorId": "admin-9" }
+        ] } },
+
+    { "id": "0023-refused-step-between-two", "title": "A refused step in the middle writes nothing and the next step still applies",
+      "input": { "authorize": "allow", "members": { "m": "a", "a": null, "b": null, "c": null },
+        "steps": [
+          { "memberId": "m", "toSponsorId": "b", "reason": "ticket 1", "actorId": "admin-7" },
+          { "memberId": "m", "toSponsorId": "b", "reason": "ticket 2", "actorId": "admin-7" },
+          { "memberId": "m", "toSponsorId": "c", "reason": "ticket 3", "actorId": "admin-7" }
+        ] },
+      "expected": { "outcomes": ["corrected", "refused:toSponsorId", "corrected"], "sponsors": { "m": "c", "a": null, "b": null, "c": null },
+        "audit": [
+          { "memberId": "m", "fromSponsorId": "a", "toSponsorId": "b", "reason": "ticket 1", "actorId": "admin-7" },
+          { "memberId": "m", "fromSponsorId": "b", "toSponsorId": "c", "reason": "ticket 3", "actorId": "admin-7" }
+        ] } }
+  ]
+}
